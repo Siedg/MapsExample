@@ -1,0 +1,52 @@
+{
+  "locations": [
+    {
+      "name": "Nagaland",
+      "latitude": 26.209481006245,
+      "longitude": 94.183744541018,
+      "description": "Random place in China"
+    },
+    {
+      "name": "Daya-Amgata",
+      "latitude": 61.822545485947,
+      "longitude": 133.326765492022,
+      "description": "Random place in Russia"
+    },
+    {
+      "name": "Aloteiro",
+      "latitude": -8.256355317274,
+      "longitude": -45.261438280054,
+      "description": "Random place in Piauí"
+    },
+    {
+      "name": "Salto de Agua",
+      "latitude": 17.307697349514,
+      "longitude": -92.142083163736,
+      "description": "Random place in Mexico"
+    },
+    {
+      "name": "UEM",
+      "latitude": -23.405518,
+      "longitude": -51.938945,
+      "description": "Universidade Estadual de Maringá"
+    },
+    {
+      "name": "UniCesumar",
+      "latitude": -23.441050,
+      "longitude": -51.916622,
+      "description": "Unicesumar unidade de Maringá"
+    },
+    {
+      "name": "Parque Japones",
+      "latitude": -23.447082,
+      "longitude": -51.975230,
+      "description": "Parque japones localizado em Maringá"
+    },
+    {
+      "name": "Parque do Ingá",
+      "latitude": -23.424677,
+      "longitude": -51.930562,
+      "description": "Parque do Ingá localizado em Maringá"
+    }
+  ]
+}
