@@ -3,7 +3,6 @@ package com.siedg.mapsexample
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
-import android.icu.text.CaseMap
 import android.location.Address
 import android.location.Geocoder
 import android.location.Location
@@ -29,9 +28,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarkerClickListener {
+    private val TAG = "MainActivity"
     lateinit var mapFragment : SupportMapFragment
     lateinit var gMap : GoogleMap
-    lateinit var currentLocation: Location
     lateinit var fusedLocationClient: FusedLocationProviderClient
     lateinit var ctx : Context
     lateinit var mClusterManager: ClusterManager<ClusterLocation>
@@ -39,10 +38,10 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
     private var url = "https://raw.githubusercontent.com/Siedg/scholar.py/master/locations.json"
     private var markers = mutableListOf<CustomMarker>()
     private var markerList = mutableListOf<Marker>()
-    private var addedMarkers = mutableListOf<MarkerOptions>()
     private var hashMapMarker = HashMap<LatLng, Marker>()
+    private var hashMapCluster = HashMap<LatLng, ClusterLocation>()
 
-    override fun onCreate(savedInstanceState: Bundle?){
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         ctx = this
@@ -52,15 +51,11 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
         mapFragment = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
         mapFragment.getMapAsync(this)
         DownloadData().execute(url)
-
-        print("=========================\n")
-        //print(gMap.cameraPosition.target.latitude.toString() + " " + gMap.cameraPosition.target.longitude.toString())
-        print("\n=========================\n")
     }
 
     override fun onMapReady(googleMap: GoogleMap) {
         gMap = googleMap
-        addMarkers()
+        setupMarkers()
 
         // Checks if the apps has the ACCESS_FINE_LOCATION permission, if not, request it from the user
         if (ActivityCompat.checkSelfPermission(
@@ -77,7 +72,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
         gMap.uiSettings.isZoomControlsEnabled = true
         gMap.setOnMarkerClickListener(this)
 
-
+        // Get user location
         fusedLocationClient.lastLocation.addOnSuccessListener(this) { location ->
             if (location != null) {
                 lastLocation = location
@@ -90,17 +85,13 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
                 )
                 setUpCluster()
                 gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 12f))
-                gMap.setOnCameraIdleListener {
-//                    showVisibleMarkets()
-                    addVisibleMarkers()
-                }
-
             }
         }
     }
 
+    // Load visible markers and delete not visible ones
     private fun addVisibleMarkers() {
-        var bounds = gMap.projection.visibleRegion.latLngBounds
+        val bounds = gMap.projection.visibleRegion.latLngBounds
         for (index in 0 until markers.size) {
             val currentMarker = MarkerOptions().position(markers[index].latLng).title(markers[index].title)
             if (bounds.contains(markers[index].latLng) && !hashMapMarker.containsKey(currentMarker.position)) {
@@ -114,9 +105,9 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
         }
     }
 
+    // Set visibility true only for the markers visible on the map
     private fun showVisibleMarkets() {
-        var bounds = gMap.projection.visibleRegion.latLngBounds
-
+        val bounds = gMap.projection.visibleRegion.latLngBounds
         for (index in 0 until markerList.size) {
             val pos = LatLng(markerList[index].position.latitude, markerList[index].position.longitude)
             if (bounds.contains(pos)) {
@@ -128,19 +119,16 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
         }
     }
 
+    // Add a few more markers
     private fun addMarkers() {
         markers.add(CustomMarker(LatLng(-33.890542, 151.274856), "Bondi Beach", false))
         markers.add(CustomMarker(LatLng(-33.923036, 151.259052), "Coogee Beach", false))
         markers.add(CustomMarker(LatLng(-34.028249, 151.157507), "Cronulla Beach", false))
         markers.add(CustomMarker(LatLng(-33.80010128657071, 151.28747820854187), "Manly Beach", false))
         markers.add(CustomMarker(LatLng(-33.950198, 151.259302), "Maroubra Beach", false))
-        markerList.add(gMap.addMarker(MarkerOptions().position(LatLng(-33.890542, 151.274856)).title("Bondi Beach")))
-        markerList.add(gMap.addMarker(MarkerOptions().position(LatLng(-33.923036, 151.259052)).title("Coogee Beach")))
-        markerList.add(gMap.addMarker(MarkerOptions().position(LatLng(-34.028249, 151.157507)).title("Cronulla Beach")))
-        markerList.add(gMap.addMarker(MarkerOptions().position(LatLng(-33.80010128657071, 151.28747820854187)).title("Manly Beach")))
-        markerList.add(gMap.addMarker(MarkerOptions().position(LatLng(-33.950198, 151.259302)).title("Maroubra Beach")))
     }
 
+    // Get addresses from Google API with LatLng
     private fun getAddress(latLng: LatLng): String {
         val geocoder = Geocoder(this)
         val addresses: List<Address>?
@@ -163,30 +151,46 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
         return addressText
     }
 
-    private fun calculateNearbyMarkers(radius: Double) {
-        // Get current location -> Get search radius -> Return nearby merkers list? / Add on map
-        // Distance Matrix Service API
-    }
-
-    private fun loadMarkersDynamically() {
-//        gMap.setClustering(
-//            ClusteringSettings()
-//                .enabled(false)
-//                .addMarkersDynamically(true)
-//        )
-
-        // Android Maps Extensions
-        // Clusterkraf
-        // Androis Maps Utils -> Clustering branch
-    }
-
     private fun setUpCluster() {
         mClusterManager = ClusterManager(this, gMap)
-        gMap.setOnCameraIdleListener(mClusterManager)
+        gMap.setOnCameraIdleListener {
+            setupMarkers()
+            mClusterManager.onCameraIdle()
+        }
         gMap.setOnMarkerClickListener(mClusterManager)
-        addItems()
     }
 
+    private fun updateCluster() {
+        mClusterManager.clearItems()
+        for (value in hashMapCluster.values) {
+            mClusterManager.addItem(value)
+        }
+    }
+
+    private fun setupMarkers() {
+        val bounds = gMap.projection.visibleRegion.latLngBounds
+        for (index in 0 until markers.size) {
+            val marker = markers[index]
+            val clusterLocation = ClusterLocation(marker.latLng.latitude, marker.latLng.longitude, marker.title, marker.latLng.toString())
+            // Checks if the current marker is in the visible area and is not on the hashMapCluster
+            if (bounds.contains(marker.latLng) && !hashMapCluster.containsKey(marker.latLng)) {
+                hashMapCluster.put(marker.latLng, clusterLocation)
+                Log.d(TAG, "Marker added, size: ${hashMapCluster.size}")
+                Toast.makeText(ctx,"Marker ${marker.title} added", Toast.LENGTH_SHORT).show()
+
+            }
+            // Checks if the current marker is not in the visible area and is in the hashMapCluster
+            else if (!bounds.contains(marker.latLng) && hashMapCluster.containsKey(marker.latLng)) {
+                Log.d(TAG, "Marker removed, size: ${hashMapCluster.size}")
+                hashMapCluster.remove(marker.latLng)
+                Toast.makeText(ctx,"Marker ${marker.title} removed", Toast.LENGTH_SHORT).show()
+            }
+            updateCluster()
+        }
+    }
+
+
+    // Adds a few locations near London
     private fun addItems() {
         // Set some lat/lng coordinates to start with.
         var lat = 51.5145160
@@ -206,10 +210,12 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
 
     override fun onMarkerClick(p0: Marker?) = false
 
+
+    // Get location data from link
     inner class DownloadData : AsyncTask<String, String, String>() {
         override fun onPreExecute() {
         }
-        // for build connection
+        // For build connection
         override fun doInBackground(vararg p0: String?): String{
             try {
                 val url = URL(p0[0])
@@ -224,7 +230,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
             return ""
         }
 
-        // for get items from json api
+        // For get items from json api
         override fun onProgressUpdate(vararg values: String?) {
             val json = JSONObject(values[0]!!)
             val locations = json.getJSONArray("locations")
@@ -238,22 +244,17 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
 
                 val latLng = LatLng(latitude.toString().toDouble(), longitude.toString().toDouble())
 
-                gMap.addMarker(
-                    MarkerOptions()
-                        .position(latLng)
-//                        .title(getAddress(latLng))
-                        .title(name.toString())
-                )
+                val customMarker = CustomMarker(latLng, name.toString(), false)
+                if (!markers.contains(customMarker)) markers.add(customMarker)
                 Toast.makeText(ctx,"Locations loaded: " + locations.length().toString(), Toast.LENGTH_SHORT).show()
+                setupMarkers() // Add markers on the map
             }
-
-
         }
         override fun onPostExecute(result: String?) {
         }
     }
 
-    // for connection api
+    // For connection api
     fun covertStreamToString(inputStream: InputStream): String {
         val bufferReader = BufferedReader(InputStreamReader(inputStream))
         var line:String
