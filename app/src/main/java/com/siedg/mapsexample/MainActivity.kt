@@ -55,7 +55,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
 
     override fun onMapReady(googleMap: GoogleMap) {
         gMap = googleMap
-        setupMarkers()
 
         // Checks if the apps has the ACCESS_FINE_LOCATION permission, if not, request it from the user
         if (ActivityCompat.checkSelfPermission(
@@ -121,11 +120,11 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
 
     // Add a few more markers
     private fun addMarkers() {
-        markers.add(CustomMarker(LatLng(-33.890542, 151.274856), "Bondi Beach", false))
-        markers.add(CustomMarker(LatLng(-33.923036, 151.259052), "Coogee Beach", false))
-        markers.add(CustomMarker(LatLng(-34.028249, 151.157507), "Cronulla Beach", false))
-        markers.add(CustomMarker(LatLng(-33.80010128657071, 151.28747820854187), "Manly Beach", false))
-        markers.add(CustomMarker(LatLng(-33.950198, 151.259302), "Maroubra Beach", false))
+        markers.add(CustomMarker(LatLng(-33.890542, 151.274856), "Bondi Beach"))
+        markers.add(CustomMarker(LatLng(-33.923036, 151.259052), "Coogee Beach"))
+        markers.add(CustomMarker(LatLng(-34.028249, 151.157507), "Cronulla Beach"))
+        markers.add(CustomMarker(LatLng(-33.80010128657071, 151.28747820854187), "Manly Beach"))
+        markers.add(CustomMarker(LatLng(-33.950198, 151.259302), "Maroubra Beach"))
     }
 
     // Get addresses from Google API with LatLng
@@ -146,7 +145,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
                 }
             }
         } catch (e: java.lang.Exception) {
-            Log.e("MainActivity", e.localizedMessage)
+            Log.e("MainActivity", e.localizedMessage!!)
         }
         return addressText
     }
@@ -190,7 +189,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
     }
 
 
-    // Adds a few locations near London
+    // Adds a few locations near London for clustering
     private fun addItems() {
         // Set some lat/lng coordinates to start with.
         var lat = 51.5145160
@@ -210,13 +209,12 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
 
     override fun onMarkerClick(p0: Marker?) = false
 
-
     // Get location data from link
     inner class DownloadData : AsyncTask<String, String, String>() {
         override fun onPreExecute() {
         }
         // For build connection
-        override fun doInBackground(vararg p0: String?): String{
+        override fun doInBackground(vararg p0: String?): String {
             try {
                 val url = URL(p0[0])
                 val urlConnect = url.openConnection() as HttpURLConnection
@@ -244,7 +242,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
 
                 val latLng = LatLng(latitude.toString().toDouble(), longitude.toString().toDouble())
 
-                val customMarker = CustomMarker(latLng, name.toString(), false)
+                val customMarker = CustomMarker(latLng, name.toString())
                 if (!markers.contains(customMarker)) markers.add(customMarker)
                 Toast.makeText(ctx,"Locations loaded: " + locations.length().toString(), Toast.LENGTH_SHORT).show()
                 setupMarkers() // Add markers on the map
