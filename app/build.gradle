@@ -13,7 +13,7 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "AIzaSyAcbJEMdf5nSqvcyxSV5xOJzfjwxYUDi58", GOOGLE_MAPS_API_KEY)
+        buildConfigField("String", "YOUR_KEY", GOOGLE_MAPS_API_KEY)
     }
 
     buildTypes {
@@ -22,7 +22,7 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         buildTypes.each {
-            it.buildConfigField "String", "AIzaSyAcbJEMdf5nSqvcyxSV5xOJzfjwxYUDi58", GOOGLE_MAPS_API_KEY
+            it.buildConfigField "String", "YOUR_KEY", GOOGLE_MAPS_API_KEY
         }
     }
 }
