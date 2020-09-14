@@ -8,6 +8,7 @@ import android.location.Geocoder
 import android.location.Location
 import android.os.AsyncTask
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -20,12 +21,14 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
 import com.google.maps.android.clustering.ClusterManager
+import kotlinx.coroutines.*
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlin.coroutines.CoroutineContext
 
 class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarkerClickListener {
     private val TAG = "MainActivity"
@@ -51,6 +54,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
         mapFragment = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
         mapFragment.getMapAsync(this)
         DownloadData().execute(url)
+//        GlobalScope.launch {download()}
     }
 
     override fun onMapReady(googleMap: GoogleMap) {
@@ -166,7 +170,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
         }
     }
 
-    private fun setupMarkers() {
+    @Synchronized private fun setupMarkers() {
         val bounds = gMap.projection.visibleRegion.latLngBounds
         for (index in 0 until markers.size) {
             val marker = markers[index]
@@ -208,6 +212,49 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
     }
 
     override fun onMarkerClick(p0: Marker?) = false
+
+
+    suspend fun download() {
+        withContext(Dispatchers.IO) {
+            var dataJsonAsStr = ""
+            try {
+                val url = URL(url)
+                val urlConnect = url.openConnection() as HttpURLConnection
+                urlConnect.connectTimeout = 700
+                val inputStream = urlConnect.inputStream
+                dataJsonAsStr = covertStreamToString(urlConnect.inputStream)
+
+            } catch (e: Exception) {
+            }
+
+            val json = JSONObject(dataJsonAsStr)
+            val locations = json.getJSONArray("locations")
+
+            for (index in 0 until locations.length()) {
+                val locale = locations.getJSONObject(index)
+                val name = locale.get("name")
+                val latitude = locale.get("latitude")
+                val longitude = locale.get("longitude")
+                val description = locale.get("description")
+
+                val latLng =
+                    LatLng(latitude.toString().toDouble(), longitude.toString().toDouble())
+
+                val customMarker = CustomMarker(latLng, name.toString())
+                if (!markers.contains(customMarker)) markers.add(customMarker)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        ctx,
+                        "Locations loaded: " + locations.length().toString(),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+
+                setupMarkers() // Add markers on the map
+            }
+        }
+    }
+
 
     // Get location data from link
     inner class DownloadData : AsyncTask<String, String, String>() {
