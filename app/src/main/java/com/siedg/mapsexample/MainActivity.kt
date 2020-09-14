@@ -13,6 +13,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProviders
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -25,13 +26,23 @@ import com.google.android.gms.maps.model.MarkerOptions
 import com.google.maps.android.clustering.ClusterManager
 import com.siedg.mapsexample.retrofit.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flow
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
+import java.io.PrintStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.sql.Time
+import java.time.LocalTime
+import java.util.*
+import kotlin.collections.HashMap
 import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.coroutineContext
+import kotlin.math.log
 
 class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarkerClickListener {
     private val TAG = "MainActivity"
@@ -46,6 +57,9 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
     private var markerList = mutableListOf<Marker>()
     private var hashMapMarker = HashMap<LatLng, Marker>()
     private var hashMapCluster = HashMap<LatLng, ClusterLocation>()
+    private var currentTime = 0.toLong()
+    private var lastTime = 0.toLong()
+    private var debounceJob: Job? = null
 
     //retrofit
     private lateinit var viewModel: MainViewModel
@@ -59,8 +73,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
 
         mapFragment = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
         mapFragment.getMapAsync(this)
-        //DownloadData().execute(url)
-//        GlobalScope.launch {download()}
+//        DownloadData().execute(url)
+
 
 
         //download with retrofit and coroutines
@@ -87,6 +101,9 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
         gMap.isMyLocationEnabled = true
         gMap.uiSettings.isZoomControlsEnabled = true
         gMap.setOnMarkerClickListener(this)
+        gMap.setOnCameraMoveListener {
+            debounceJob?.cancel()
+        }
 
         // Get user location
         fusedLocationClient.lastLocation.addOnSuccessListener(this) { location ->
@@ -103,6 +120,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
                 gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 12f))
             }
         }
+
     }
 
     // Load visible markers and delete not visible ones
@@ -167,11 +185,27 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
         return addressText
     }
 
+    private fun dbTest(delayMs: Long): Boolean {
+        currentTime = Calendar.getInstance().timeInMillis
+        val res = (currentTime - lastTime) > delayMs
+        if ((currentTime - lastTime) > delayMs ) {
+            lastTime = Calendar.getInstance().timeInMillis
+            return true
+        }
+        return false
+    }
+
     private fun setUpCluster() {
         mClusterManager = ClusterManager(this, gMap)
         gMap.setOnCameraIdleListener {
-            setupMarkers()
-            mClusterManager.onCameraIdle()
+            debounceJob?.cancel()
+            debounceJob = CoroutineScope(GlobalScope.coroutineContext).launch {
+                delay(1000)
+                withContext(Dispatchers.Main) {
+                    setupMarkers()
+                    mClusterManager.onCameraIdle()
+                }
+            }
         }
         gMap.setOnMarkerClickListener(mClusterManager)
     }
@@ -187,25 +221,27 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
         val bounds = gMap.projection.visibleRegion.latLngBounds
         for (index in 0 until markers.size) {
             val marker = markers[index]
-            val clusterLocation = ClusterLocation(marker.latLng.latitude, marker.latLng.longitude, marker.title, marker.latLng.toString())
+            val clusterLocation = ClusterLocation(
+                marker.latLng.latitude,
+                marker.latLng.longitude,
+                marker.title,
+                marker.latLng.toString()
+            )
             // Checks if the current marker is in the visible area and is not on the hashMapCluster
             if (bounds.contains(marker.latLng) && !hashMapCluster.containsKey(marker.latLng)) {
                 hashMapCluster.put(marker.latLng, clusterLocation)
                 Log.d(TAG, "Marker added, size: ${hashMapCluster.size}")
-                Toast.makeText(ctx,"Marker ${marker.title} added", Toast.LENGTH_SHORT).show()
-
+                Toast.makeText(ctx, "Marker ${marker.title} added", Toast.LENGTH_SHORT).show()
             }
             // Checks if the current marker is not in the visible area and is in the hashMapCluster
             else if (!bounds.contains(marker.latLng) && hashMapCluster.containsKey(marker.latLng)) {
                 Log.d(TAG, "Marker removed, size: ${hashMapCluster.size}")
                 hashMapCluster.remove(marker.latLng)
-                Toast.makeText(ctx,"Marker ${marker.title} removed", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, "Marker ${marker.title} removed", Toast.LENGTH_SHORT).show()
             }
             updateCluster()
         }
-
     }
-
 
     // Adds a few locations near London for clustering
     private fun addItems() {
@@ -226,49 +262,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
     }
 
     override fun onMarkerClick(p0: Marker?) = false
-
-
-    suspend fun download() {
-        withContext(Dispatchers.IO) {
-            var dataJsonAsStr = ""
-            try {
-                val url = URL(url)
-                val urlConnect = url.openConnection() as HttpURLConnection
-                urlConnect.connectTimeout = 700
-                val inputStream = urlConnect.inputStream
-                dataJsonAsStr = covertStreamToString(urlConnect.inputStream)
-
-            } catch (e: Exception) {
-            }
-
-            val json = JSONObject(dataJsonAsStr)
-            val locations = json.getJSONArray("locations")
-
-            for (index in 0 until locations.length()) {
-                val locale = locations.getJSONObject(index)
-                val name = locale.get("name")
-                val latitude = locale.get("latitude")
-                val longitude = locale.get("longitude")
-                val description = locale.get("description")
-
-                val latLng =
-                    LatLng(latitude.toString().toDouble(), longitude.toString().toDouble())
-
-                val customMarker = CustomMarker(latLng, name.toString())
-                if (!markers.contains(customMarker)) markers.add(customMarker)
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(
-                        ctx,
-                        "Locations loaded: " + locations.length().toString(),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-
-                setupMarkers() // Add markers on the map
-            }
-        }
-    }
-
 
     // Get location data from link
     inner class DownloadData : AsyncTask<String, String, String>() {
@@ -306,7 +299,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
                 val customMarker = CustomMarker(latLng, name.toString())
                 if (!markers.contains(customMarker)) markers.add(customMarker)
                 Toast.makeText(ctx,"Locations loaded: " + locations.length().toString(), Toast.LENGTH_SHORT).show()
-                setupMarkers() // Add markers on the map
+//                setupMarkers() // Add markers on the map
             }
         }
         override fun onPostExecute(result: String?) {
@@ -330,9 +323,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
 
         return allString;
     }
-
-
-
 
     //download data with retrofit and coroutines
     private fun setupViewModel() {
@@ -364,5 +354,20 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
                 }
             }
         })
+    }
+}
+
+fun <T> debounce(
+    waitMs: Long = 300L,
+    coroutineScope: CoroutineScope,
+    destinationFunction: (T) -> Unit
+): (T) -> Unit {
+    var debounceJob: Job? = null
+    return { param: T ->
+        debounceJob?.cancel()
+        debounceJob = coroutineScope.launch {
+            delay(waitMs)
+            destinationFunction(param)
+        }
     }
 }
