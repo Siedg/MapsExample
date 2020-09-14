@@ -52,13 +52,8 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
     lateinit var ctx : Context
     lateinit var mClusterManager: ClusterManager<ClusterLocation>
     private lateinit var lastLocation: android.location.Location
-    private var url = "https://raw.githubusercontent.com/Siedg/scholar.py/master/locations.json"
     private var markers = mutableListOf<CustomMarker>()
-    private var markerList = mutableListOf<Marker>()
-    private var hashMapMarker = HashMap<LatLng, Marker>()
     private var hashMapCluster = HashMap<LatLng, ClusterLocation>()
-    private var currentTime = 0.toLong()
-    private var lastTime = 0.toLong()
     private var debounceJob: Job? = null
 
     //retrofit
@@ -73,15 +68,10 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
 
         mapFragment = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
         mapFragment.getMapAsync(this)
-//        DownloadData().execute(url)
-
-
 
         //download with retrofit and coroutines
         setupViewModel()
         DownloadLocations()
-
-
     }
 
     override fun onMapReady(googleMap: GoogleMap) {
@@ -120,79 +110,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
                 gMap.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 12f))
             }
         }
-
-    }
-
-    // Load visible markers and delete not visible ones
-    private fun addVisibleMarkers() {
-        val bounds = gMap.projection.visibleRegion.latLngBounds
-        for (index in 0 until markers.size) {
-            val currentMarker = MarkerOptions().position(markers[index].latLng).title(markers[index].title)
-            if (bounds.contains(markers[index].latLng) && !hashMapMarker.containsKey(currentMarker.position)) {
-                hashMapMarker.put(currentMarker.position, gMap.addMarker(MarkerOptions().position(markers[index].latLng).title(markers[index].title)))
-                Toast.makeText(ctx,"Marker $index added", Toast.LENGTH_SHORT).show()
-            } else if (!bounds.contains(markers[index].latLng) && hashMapMarker.containsKey(currentMarker.position)) {
-                hashMapMarker[currentMarker.position]?.remove()
-                hashMapMarker.remove(currentMarker.position)
-                Toast.makeText(ctx,"Marker $index removed", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    // Set visibility true only for the markers visible on the map
-    private fun showVisibleMarkets() {
-        val bounds = gMap.projection.visibleRegion.latLngBounds
-        for (index in 0 until markerList.size) {
-            val pos = LatLng(markerList[index].position.latitude, markerList[index].position.longitude)
-            if (bounds.contains(pos)) {
-                markerList[index].isVisible = true
-                Toast.makeText(ctx,"Marker $index is now visible", Toast.LENGTH_SHORT).show()
-            } else {
-                markerList[index].isVisible = false
-            }
-        }
-    }
-
-    // Add a few more markers
-    private fun addMarkers() {
-        markers.add(CustomMarker(LatLng(-33.890542, 151.274856), "Bondi Beach"))
-        markers.add(CustomMarker(LatLng(-33.923036, 151.259052), "Coogee Beach"))
-        markers.add(CustomMarker(LatLng(-34.028249, 151.157507), "Cronulla Beach"))
-        markers.add(CustomMarker(LatLng(-33.80010128657071, 151.28747820854187), "Manly Beach"))
-        markers.add(CustomMarker(LatLng(-33.950198, 151.259302), "Maroubra Beach"))
-    }
-
-    // Get addresses from Google API with LatLng
-    private fun getAddress(latLng: LatLng): String {
-        val geocoder = Geocoder(this)
-        val addresses: List<Address>?
-        val address: Address?
-        var addressText = ""
-
-        try {
-            addresses = geocoder.getFromLocation(latLng.latitude, latLng.longitude, 1)
-            if (null != addresses && !addresses.isEmpty()) {
-                address = addresses[0]
-                for (index in 0 until address.maxAddressLineIndex) {
-                    addressText += if (index == 0) address.getAddressLine(index) else "\n" + address.getAddressLine(
-                        index
-                    )
-                }
-            }
-        } catch (e: java.lang.Exception) {
-            Log.e("MainActivity", e.localizedMessage!!)
-        }
-        return addressText
-    }
-
-    private fun dbTest(delayMs: Long): Boolean {
-        currentTime = Calendar.getInstance().timeInMillis
-        val res = (currentTime - lastTime) > delayMs
-        if ((currentTime - lastTime) > delayMs ) {
-            lastTime = Calendar.getInstance().timeInMillis
-            return true
-        }
-        return false
     }
 
     private fun setUpCluster() {
@@ -243,86 +160,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
         }
     }
 
-    // Adds a few locations near London for clustering
-    private fun addItems() {
-        // Set some lat/lng coordinates to start with.
-        var lat = 51.5145160
-        var lng = -0.1270060
-
-        // Add ten cluster items in close proximity, for purposes of this example.
-        for (i in 0..9) {
-            val offTitle = "Location $i"
-            val offSnippet = "Snippet $i"
-            val offset = i / 60.0
-            lat += offset
-            lng += offset
-            val offsetItem = ClusterLocation(lat, lng, offTitle, offSnippet)
-            mClusterManager.addItem(offsetItem)
-        }
-    }
-
     override fun onMarkerClick(p0: Marker?) = false
-
-    // Get location data from link
-    inner class DownloadData : AsyncTask<String, String, String>() {
-        override fun onPreExecute() {
-        }
-        // For build connection
-        override fun doInBackground(vararg p0: String?): String {
-            try {
-                val url = URL(p0[0])
-                val urlConnect = url.openConnection() as HttpURLConnection
-                urlConnect.connectTimeout = 700
-                val inputStream = urlConnect.inputStream
-                val dataJsonAsStr = covertStreamToString(urlConnect.inputStream)
-                publishProgress(dataJsonAsStr)
-
-            }   catch (e: Exception){
-            }
-            return ""
-        }
-
-        // For get items from json api
-        override fun onProgressUpdate(vararg values: String?) {
-            val json = JSONObject(values[0]!!)
-            val locations = json.getJSONArray("locations")
-
-            for (index in 0 until locations.length()) {
-                val locale = locations.getJSONObject(index)
-                val name = locale.get("name")
-                val latitude = locale.get("latitude")
-                val longitude = locale.get("longitude")
-                val description = locale.get("description")
-
-                val latLng = LatLng(latitude.toString().toDouble(), longitude.toString().toDouble())
-
-                val customMarker = CustomMarker(latLng, name.toString())
-                if (!markers.contains(customMarker)) markers.add(customMarker)
-                Toast.makeText(ctx,"Locations loaded: " + locations.length().toString(), Toast.LENGTH_SHORT).show()
-//                setupMarkers() // Add markers on the map
-            }
-        }
-        override fun onPostExecute(result: String?) {
-        }
-    }
-
-    // For connection api
-    fun covertStreamToString(inputStream: InputStream): String {
-        val bufferReader = BufferedReader(InputStreamReader(inputStream))
-        var line:String
-        var  allString:String=""
-        try {
-            do{
-                line=bufferReader.readLine()
-                if (line!=null)
-                    allString+=line
-            }while (line!=null)
-
-            bufferReader.close()
-        }catch (ex: java.lang.Exception){}
-
-        return allString;
-    }
 
     //download data with retrofit and coroutines
     private fun setupViewModel() {
@@ -354,20 +192,5 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
                 }
             }
         })
-    }
-}
-
-fun <T> debounce(
-    waitMs: Long = 300L,
-    coroutineScope: CoroutineScope,
-    destinationFunction: (T) -> Unit
-): (T) -> Unit {
-    var debounceJob: Job? = null
-    return { param: T ->
-        debounceJob?.cancel()
-        debounceJob = coroutineScope.launch {
-            delay(waitMs)
-            destinationFunction(param)
-        }
     }
 }
