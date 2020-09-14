@@ -13,6 +13,8 @@ import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.lifecycle.Observer
+import androidx.lifecycle.ViewModelProviders
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.*
@@ -21,6 +23,7 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
 import com.google.maps.android.clustering.ClusterManager
+import com.siedg.mapsexample.retrofit.*
 import kotlinx.coroutines.*
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -44,6 +47,9 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
     private var hashMapMarker = HashMap<LatLng, Marker>()
     private var hashMapCluster = HashMap<LatLng, ClusterLocation>()
 
+    //retrofit
+    private lateinit var viewModel: MainViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -53,8 +59,15 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
 
         mapFragment = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
         mapFragment.getMapAsync(this)
-        DownloadData().execute(url)
+        //DownloadData().execute(url)
 //        GlobalScope.launch {download()}
+
+
+        //download with retrofit and coroutines
+        setupViewModel()
+        DownloadLocations()
+
+
     }
 
     override fun onMapReady(googleMap: GoogleMap) {
@@ -82,7 +95,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
                 val currentLatLng = LatLng(location.latitude, location.longitude)
                 gMap.addMarker(
                     MarkerOptions()
-                        .icon(BitmapDescriptorFactory.fromBitmap(BitmapFactory.decodeResource(resources, R.mipmap.ic_user_location)))
+                        //.icon(BitmapDescriptorFactory.fromBitmap(BitmapFactory.decodeResource(resources, R.mipmap.ic_user_location)))
                         .position(currentLatLng)
                         .title("You are here")
                 )
@@ -190,6 +203,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
             }
             updateCluster()
         }
+
     }
 
 
@@ -315,5 +329,40 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback, GoogleMap.OnMarker
         }catch (ex: java.lang.Exception){}
 
         return allString;
+    }
+
+
+
+
+    //download data with retrofit and coroutines
+    private fun setupViewModel() {
+        viewModel = ViewModelProviders.of(
+            this,
+            ViewModelFactory(ApiHelper(RetrofitBuilder.apiService))
+        ).get(MainViewModel::class.java)
+    }
+
+    private fun DownloadLocations() {
+        viewModel.getData().observe(this, Observer {
+            it?.let { resource ->
+                when (resource.status) {
+                    Status.SUCCESS -> {
+                        resource.data?.let { data ->
+                            data.locations.map {
+                                var latLng = LatLng(it.latitude,it.longitude)
+                                val customMarker = CustomMarker(latLng, it.name)
+                                if (!markers.contains(customMarker)) markers.add(customMarker)
+                            }
+                        }
+                        setupMarkers()
+                    }
+                    Status.ERROR -> {
+                        Toast.makeText(this, it.message, Toast.LENGTH_LONG).show()
+                    }
+                    Status.LOADING -> {
+                    }
+                }
+            }
+        })
     }
 }
